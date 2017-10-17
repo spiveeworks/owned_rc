@@ -2,9 +2,12 @@ use std::cell;
 use std::rc;
 
 mod refs;
+mod compare;
 
 pub use refs::Ref;
 pub use refs::RefMut;
+
+pub use compare::PtrCompare;
 
 pub struct Owned<T> (rc::Rc<cell::RefCell<T>>);
 pub struct Link<T> (rc::Weak<cell::RefCell<T>>);
@@ -50,14 +53,18 @@ impl<T> Owned<T> {
         Link(rc::Rc::downgrade(&self.0))
     }
 
-    pub fn try_borrow(ptr: &Self) -> Result<Ref<T>, cell::BorrowError> {
-        let strong = ptr.0.clone();
+    pub fn try_borrow(&self) -> Result<Ref<T>, cell::BorrowError> {
+        let strong = self.0.clone();
         Ok(Ref::new(strong)?)
     }
 
-    pub fn try_borrow_mut(ptr: &Self) -> Result<RefMut<T>, cell::BorrowMutError> {
-        let strong = ptr.0.clone();
+    pub fn try_borrow_mut(&self) -> Result<RefMut<T>, cell::BorrowMutError> {
+        let strong = self.0.clone();
         Ok(RefMut::new(strong)?)
+    }
+
+    pub fn compare(&self) -> PtrCompare<T> {
+        PtrCompare::from_rc(&self.0)
     }
 }
 
@@ -76,7 +83,7 @@ impl<T> Link<T> {
         Ok(Ref::new(strong)?)
     }
 
-    pub fn try_borrow_mut(self: &Self) -> Result<RefMut<T>, BorrowMutError> {
+    pub fn try_borrow_mut(&self) -> Result<RefMut<T>, BorrowMutError> {
         let strong = self.0
                          .upgrade()
                          .ok_or(BorrowMutError::Missing)?;

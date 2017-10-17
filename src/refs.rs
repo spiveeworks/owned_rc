@@ -5,6 +5,8 @@ use std::ops;
 use std::ptr;
 use std::rc;
 
+use compare;
+
 struct RawRc<T: ?Sized>(*const T);
 
 impl<T: ?Sized> RawRc<T> {
@@ -19,6 +21,8 @@ impl<T: ?Sized> RawRc<T> {
     unsafe fn unbounded<'a, 'b>(&'a self) -> &'b T {
         &*self.0
     }
+
+    unsafe fn get_raw(&self) -> *const T { self.0 }
 }
 
 impl<T: ?Sized> Clone for RawRc<T> {
@@ -161,10 +165,14 @@ impl<'a, Brw, T> RefInner<'a, Brw, T>
     where Brw: RefDeref<'a>,
           T: 'a + ?Sized
 {
-
-
     fn inner(&self) -> &Brw { &*self.borrow }
     fn inner_mut(&mut self) -> &mut Brw { &mut *self.borrow }
+
+    fn compare(&self) -> compare::PtrCompare<T> {
+        unsafe {
+            compare::PtrCompare::from_raw(self.strong.get_raw())
+        }
+    }
 
     fn map<MBrw, F>(self: RefInner<'a, Brw, T>, f: F) -> RefInner<'a, MBrw, T>
         where F: FnOnce(Brw) -> MBrw,
@@ -260,6 +268,10 @@ impl<'a, T: 'a, ST: 'a> Ref<'a, T, ST> {
         });
         Ref { inner }
     }
+
+    pub fn compare_source(&self) -> compare::PtrCompare<ST> {
+        self.inner.compare()
+    }
 }
 
 impl<'a, T: 'a> RefMut<'a, T> {
@@ -279,5 +291,9 @@ impl<'a, T: 'a, ST: 'a> RefMut<'a, T, ST> {
             cell::RefMut::map(cell_ref, f)
         });
         RefMut { inner }
+    }
+
+    pub fn compare_source(&self) -> compare::PtrCompare<ST> {
+        self.inner.compare()
     }
 }
