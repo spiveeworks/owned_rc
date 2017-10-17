@@ -1,30 +1,13 @@
-use std::rc;
 use std::cell;
-use std::ops;
-use std::mem;
+use std::rc;
+
+mod refs;
+
+pub use refs::Ref;
+pub use refs::RefMut;
 
 pub struct Owned<T> (rc::Rc<cell::RefCell<T>>);
 pub struct Link<T> (rc::Weak<cell::RefCell<T>>);
-
-// These types are a mess...
-// raw pointer to keep the reference count alive
-//   while an unbounded Ref exists.
-// but since we need to manually drop them in order,
-//   Option the Ref so that we can do the Option dance during Drop.
-// so basically never use the strong pointer,
-//   and never empty the Option.
-//
-// It would be nice to use a trait to combine all of these duplicate functions
-//   but we'll see if that makes it more or less neat
-pub struct Ref<'a, T: 'a> {
-    strong: *const cell::RefCell<T>,
-    borrow: Option<cell::Ref<'a, T>>,
-}
-
-pub struct RefMut<'a, T: 'a> {
-    strong: *const cell::RefCell<T>,
-    borrow: Option<cell::RefMut<'a, T>>,
-}
 
 pub enum BorrowError {
     Missing,
@@ -67,17 +50,6 @@ impl<T> Owned<T> {
         Link(rc::Rc::downgrade(&self.0))
     }
 
-    pub fn ptr_eq(&self, other: &Ref<T>) -> bool {
-        unsafe {
-            // use the Rc implementation of ptr_eq
-            let other = rc::Rc::from_raw(other.strong);
-            let result = rc::Rc::ptr_eq(&self.0, &other);
-            // don't drop the Rc, that's the Ref's job
-            mem::forget(other);
-            result
-        }
-    }
-
     pub fn try_borrow(ptr: &Self) -> Result<Ref<T>, cell::BorrowError> {
         let strong = ptr.0.clone();
         Ok(Ref::new(strong)?)
@@ -111,84 +83,4 @@ impl<T> Link<T> {
         Ok(RefMut::new(strong)?)
     }
 }
-
-impl<'a, T: 'a> ops::Deref for Ref<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &*self.borrow
-              .as_ref()
-              .expect("Empty Ref not dropped.")
-    }
-}
-
-impl<'a, T: 'a> Ref<'a, T> {
-    fn new(strong: rc::Rc<cell::RefCell<T>>) -> Result<Self, cell::BorrowError> {
-        let mut result = Ref {
-            strong: rc::Rc::into_raw(strong),
-            borrow: None,
-        };
-        unsafe {
-            let ref_cell = &*result.strong;
-            result.borrow = Some(ref_cell.try_borrow()?);
-        }
-        Ok(result)
-    }
-}
-
-
-impl<'a, T: 'a> RefMut<'a, T> {
-    fn new(strong: rc::Rc<cell::RefCell<T>>) -> Result<Self, cell::BorrowMutError> {
-        let mut result = RefMut {
-            strong: rc::Rc::into_raw(strong),
-            borrow: None,
-        };
-        unsafe {
-            let ref_cell = &*result.strong;
-            result.borrow = Some(ref_cell.try_borrow_mut()?);
-        }
-        Ok(result)
-    }
-}
-
-
-impl<'a, T: 'a> ops::Deref for RefMut<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &*self.borrow
-              .as_ref()
-              .expect("Empty RefMut not dropped.")
-    }
-}
-
-impl<'a, T: 'a> ops::DerefMut for RefMut<'a, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        &mut *self.borrow
-                  .as_mut()
-                  .expect("Empty RefMut not dropped.")
-    }
-}
-
-
-
-// These drop methods are safe,
-// we can drop the Rc because it is private
-// we have to drop the borrow first though, to uphold other contracts
-impl<'a, T: 'a> Drop for Ref<'a, T> {
-    fn drop(&mut self) {
-        unsafe {
-            mem::drop(self.borrow.take());
-            mem::drop(rc::Rc::from_raw(self.strong));
-        }
-    }
-}
-
-impl<'a, T: 'a> Drop for RefMut<'a, T> {
-    fn drop(&mut self) {
-        unsafe {
-            mem::drop(self.borrow.take());
-            mem::drop(rc::Rc::from_raw(self.strong));
-        }
-    }
-}
-
 
