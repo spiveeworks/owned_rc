@@ -269,8 +269,8 @@ impl<'a, T: 'a, ST: 'a> Ref<'a, T, ST> {
         Ref { inner }
     }
 
-    pub fn compare_source(&self) -> compare::PtrCompare<ST> {
-        self.inner.compare()
+    pub fn compare_source(this: &Self) -> compare::PtrCompare<ST> {
+        this.inner.compare()
     }
 }
 
@@ -293,7 +293,7 @@ impl<'a, T: 'a, ST: 'a> RefMut<'a, T, ST> {
         RefMut { inner }
     }
 
-    pub fn compare_source(&self) -> compare::PtrCompare<ST> {
-        self.inner.compare()
+    pub fn compare_source(this: &Self) -> compare::PtrCompare<ST> {
+        this.inner.compare()
     }
 }
