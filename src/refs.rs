@@ -233,14 +233,14 @@ impl<'a, T: 'a, ST: 'a> ops::Deref for Ref<'a, T, ST> {
     }
 }
 
-impl<'a, T: 'a> ops::Deref for RefMut<'a, T> {
+impl<'a, T: 'a, ST: 'a> ops::Deref for RefMut<'a, T, ST> {
     type Target = T;
     fn deref(&self) -> &T {
         &*self.inner.inner()
     }
 }
 
-impl<'a, T: 'a> ops::DerefMut for RefMut<'a, T> {
+impl<'a, T: 'a, ST: 'a> ops::DerefMut for RefMut<'a, T, ST> {
     fn deref_mut(&mut self) -> &mut T {
         &mut *self.inner.inner_mut()
     }
